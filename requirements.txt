@@ -1,0 +1,81 @@
+# requirements.txt
+
+# =========================================================
+# XARION 1.0 — Dependencias
+# =========================================================
+# Nota: XARION-1.0 está diseñado para funcionar incluso si
+# algunas dependencias opcionales no están instaladas
+# (importación dinámica con importlib). Las que aparecen
+# como REQUERIDAS son imprescindibles para el core.
+
+# ---------------------------------------------------------
+# CORE (REQUERIDO)
+# ---------------------------------------------------------
+numpy>=1.24.0                # cálculos numéricos base
+Pillow>=10.0.0               # manejo de imágenes/capas PNG
+
+# ---------------------------------------------------------
+# AUDIO — TTS (OPCIONAL, según motor elegido)
+# ---------------------------------------------------------
+# edge-tts                     # Microsoft Edge TTS (recomendado, ligero)
+# pyttsx3                      # TTS del sistema (offline)
+# piper-tts                    # TTS local rápido
+# TTS                          # Coqui TTS (neural, pesado)
+# elevenlabs                   # API online (requiere ELEVENLABS_API_KEY)
+
+# ---------------------------------------------------------
+# AUDIO — ANÁLISIS (OPCIONAL, mejora el analyzer)
+# ---------------------------------------------------------
+# librosa                      # análisis espectral avanzado
+# soundfile                    # lectura/escritura de audio
+# sounddevice                  # reproducción en tiempo real
+# pydub                        # manipulación de audio
+
+# ---------------------------------------------------------
+# VIDEO / GRABACIÓN (OPCIONAL)
+# ---------------------------------------------------------
+# opencv-python                # cv2.VideoWriter para grabación
+# imageio                      # alternativa a OpenCV
+# imageio-ffmpeg               # backend ffmpeg para imageio
+
+# ---------------------------------------------------------
+# RENDERIZADO 3D / AVANZADO (OPCIONAL)
+# ---------------------------------------------------------
+# pyrender                     # renderizado 3D
+# trimesh                      # carga de modelos 3D
+# moderngl                     # OpenGL moderno
+# PyOpenGL                     # bindings OpenGL
+
+# ---------------------------------------------------------
+# AVATAR — VRM / Live2D (OPCIONAL según formato)
+# ---------------------------------------------------------
+# pyvrm                        # carga de modelos VRM
+# live2d-py                    # integración Live2D
+
+# ---------------------------------------------------------
+# INTERFAZ (OPCIONAL)
+# ---------------------------------------------------------
+# PyQt6                        # UI de escritorio
+# PySide6                      # alternativa a PyQt
+# tkinter                      # UI simple (incluida en Python estándar)
+
+# ---------------------------------------------------------
+# UTILIDADES (OPCIONAL)
+# ---------------------------------------------------------
+# tqdm                         # barras de progreso
+# colorama                     # colores en consola
+# python-dotenv                # variables de entorno desde .env
+
+# =========================================================
+# INSTALACIÓN RECOMENDADA
+# =========================================================
+# Mínimo funcional:
+#   pip install numpy Pillow edge-tts opencv-python
+#
+# Recomendado para producción:
+#   pip install numpy Pillow edge-tts opencv-python librosa soundfile
+#
+# Completo:
+#   pip install -r requirements.txt
+#
+# =========================================================

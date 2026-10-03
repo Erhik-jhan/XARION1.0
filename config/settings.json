@@ -1,0 +1,66 @@
+{
+  "general": {
+    "language": "es",
+    "theme": "dark",
+    "autosave": true,
+    "autosave_interval": 60.0
+  },
+  "render": {
+    "fps": 30,
+    "width": 1280,
+    "height": 720,
+    "background_color": [0, 0, 0, 255],
+    "antialiasing": true,
+    "quality": "high"
+  },
+  "avatar": {
+    "default_path": "assets/avatar/avatar.png",
+    "default_format": "png_layers",
+    "scale": 1.0,
+    "auto_blink": true,
+    "auto_idle": true
+  },
+  "audio": {
+    "tts_engine": "edge",
+    "tts_voice": "es-ES-AlvaroNeural",
+    "tts_rate": 1.0,
+    "tts_pitch": 1.0,
+    "tts_volume": 1.0,
+    "sample_rate": 22050,
+    "channels": 1,
+    "output_format": "wav"
+  },
+  "motion": {
+    "mode": "combined",
+    "intensity": 1.0,
+    "smoothing": 0.15,
+    "idle_enabled": true,
+    "voice_reactive": true,
+    "rhythm_reactive": true
+  },
+  "gestures": {
+    "auto_detect": true,
+    "default_variant": "base",
+    "talking_variant": "normal",
+    "question_variant": "neutral"
+  },
+  "recording": {
+    "codec": "mp4v",
+    "extension": ".mp4",
+    "include_audio": true,
+    "fps": 30,
+    "resolution": [1280, 720]
+  },
+  "performance": {
+    "max_cpu": 90,
+    "max_memory_mb": 2048,
+    "multithreading": true,
+    "gpu_acceleration": false
+  },
+  "debug": {
+    "enabled": false,
+    "log_level": "info",
+    "show_fps": false,
+    "show_signals": false
+  }
+}

@@ -1,0 +1,327 @@
+# =========================================================
+# XARION 1.0 - pyproject.toml
+# =========================================================
+# Configuracion del proyecto, dependencias y herramientas.
+# Estandar PEP 621 + setuptools >= 68.
+# =========================================================
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+# =========================================================
+# METADATA DEL PROYECTO
+# =========================================================
+[project]
+name = "xarion"
+version = "1.0.0"
+description = "XARION 1.0 - Avatar animado con voz, movimiento y gestos"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "XARION" }
+]
+maintainers = [
+    { name = "XARION" }
+]
+keywords = [
+    "avatar",
+    "animation",
+    "tts",
+    "motion",
+    "gestures",
+    "python",
+    "xarion",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: Spanish",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Graphics :: 3D Rendering",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+# ---------------------------------------------------------
+# Dependencias principales (requeridas)
+# ---------------------------------------------------------
+dependencies = [
+    "numpy>=1.24.0",
+    "Pillow>=10.0.0",
+]
+
+# ---------------------------------------------------------
+# Dependencias opcionales (extras)
+# ---------------------------------------------------------
+[project.optional-dependencies]
+
+# Audio: TTS y analisis
+audio = [
+    "edge-tts>=6.1.0",
+    "pyttsx3>=2.90",
+    "librosa>=0.10.0",
+    "soundfile>=0.12.0",
+    "sounddevice>=0.4.6",
+    "pydub>=0.25.1",
+]
+
+# Video: grabacion y exportacion
+video = [
+    "opencv-python>=4.8.0",
+    "imageio>=2.31.0",
+    "imageio-ffmpeg>=0.4.9",
+]
+
+# Interfaz de escritorio
+ui = [
+    "PyQt6>=6.5.0",
+]
+
+# Renderizado 3D avanzado
+render = [
+    "pyrender>=0.1.45",
+    "trimesh>=4.0.0",
+    "moderngl>=5.8.0",
+    "PyOpenGL>=3.1.7",
+]
+
+# Utilidades de desarrollo y diagnostico
+utils = [
+    "tqdm>=4.66.0",
+    "colorama>=0.4.6",
+    "python-dotenv>=1.0.0",
+]
+
+# Herramientas de desarrollo
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.10.0",
+    "ruff>=0.1.0",
+    "mypy>=1.6.0",
+    "build>=1.0.0",
+    "twine>=4.0.0",
+]
+
+# Todo en uno (uso completo)
+full = [
+    "edge-tts>=6.1.0",
+    "pyttsx3>=2.90",
+    "librosa>=0.10.0",
+    "soundfile>=0.12.0",
+    "sounddevice>=0.4.6",
+    "pydub>=0.25.1",
+    "opencv-python>=4.8.0",
+    "imageio>=2.31.0",
+    "imageio-ffmpeg>=0.4.9",
+    "tqdm>=4.66.0",
+    "colorama>=0.4.6",
+    "python-dotenv>=1.0.0",
+]
+
+# ---------------------------------------------------------
+# Punto de entrada (CLI)
+# ---------------------------------------------------------
+[project.scripts]
+xarion = "main:main"
+
+# ---------------------------------------------------------
+# URLs del proyecto
+# ---------------------------------------------------------
+[project.urls]
+Homepage = "https://github.com/tu-usuario/xarion-1.0"
+Documentation = "https://github.com/tu-usuario/xarion-1.0/tree/main/docs"
+Repository = "https://github.com/tu-usuario/xarion-1.0"
+Issues = "https://github.com/tu-usuario/xarion-1.0/issues"
+Changelog = "https://github.com/tu-usuario/xarion-1.0/blob/main/CHANGELOG.md"
+
+# =========================================================
+# CONFIGURACION DE SETUPTOOLS
+# =========================================================
+[tool.setuptools]
+include-package-data = true
+
+packages = [
+    "app",
+    "app.core",
+    "app.avatar",
+    "app.audio",
+    "app.motion",
+    "app.gestures",
+    "app.interface",
+    "app.output",
+]
+
+py-modules = ["main"]
+
+# ---------------------------------------------------------
+# Datos incluidos en el paquete
+# ---------------------------------------------------------
+[tool.setuptools.package-data]
+"app" = ["py.typed"]
+"*" = ["*.json", "*.png", "*.wav", "*.md"]
+
+# ---------------------------------------------------------
+# Excluir del build
+# ---------------------------------------------------------
+[tool.setuptools.exclude-package-data]
+"*" = [
+    "*.pyc",
+    "*.pyo",
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+]
+
+# =========================================================
+# BLACK - Formateador
+# =========================================================
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+    \.git
+  | \.mypy_cache
+  | \.pytest_cache
+  | \.ruff_cache
+  | build
+  | dist
+)/
+'''
+
+# =========================================================
+# RUFF - Linter
+# =========================================================
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["app", "tests"]
+
+exclude = [
+    ".git",
+    "__pycache__",
+    "build",
+    "dist",
+    ".venv",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+    "N",   # pep8-naming
+    "SIM", # flake8-simplify
+]
+ignore = [
+    "E501",  # line too long (gestionado por black)
+    "B008",  # do not perform function calls in argument defaults
+    "N803",  # argument name should be lowercase (permite X, Y)
+    "N806",  # variable in function should be lowercase
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B", "N", "S"]
+"__init__.py" = ["F401", "F403"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
+# =========================================================
+# MYPY - Type checker
+# =========================================================
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+exclude = [
+    "build",
+    "dist",
+    ".venv",
+    "tests/",
+]
+
+[[tool.mypy.overrides]]
+module = [
+    "numpy.*",
+    "PIL.*",
+    "cv2.*",
+    "librosa.*",
+    "soundfile.*",
+    "sounddevice.*",
+    "edge_tts.*",
+    "pyttsx3.*",
+    "imageio.*",
+    "elevenlabs.*",
+]
+ignore_missing_imports = true
+
+# =========================================================
+# PYTEST - Testing
+# =========================================================
+[tool.pytest.ini_options]
+minversion = "7.4"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+    "--disable-warnings",
+]
+markers = [
+    "slow: marks tests as slow",
+    "integration: marks tests as integration",
+    "unit: marks tests as unit",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+
+# =========================================================
+# COVERAGE - Cobertura de tests
+# =========================================================
+[tool.coverage.run]
+source = ["app"]
+omit = [
+    "*/tests/*",
+    "*/__init__.py",
+    "*/main.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+show_missing = true

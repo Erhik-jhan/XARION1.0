@@ -1,0 +1,204 @@
+# =========================================================
+# XARION 1.0 - .gitignore
+# =========================================================
+
+# ---------------------------------------------------------
+# Python
+# ---------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ---------------------------------------------------------
+# Entornos virtuales
+# ---------------------------------------------------------
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.python-version
+
+# ---------------------------------------------------------
+# Testing y cobertura
+# ---------------------------------------------------------
+.pytest_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+htmlcov/
+pytestdebug.log
+
+# ---------------------------------------------------------
+# Type checkers y linters
+# ---------------------------------------------------------
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache/
+.pytype/
+.cython_debug/
+
+# ---------------------------------------------------------
+# IDEs y editores
+# ---------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-workspace
+*.sublime-project
+*.code-workspace
+
+# ---------------------------------------------------------
+# Sistema operativo
+# ---------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ---------------------------------------------------------
+# XARION - Salidas generadas
+# ---------------------------------------------------------
+output/
+*.mp4
+*.webm
+*.mkv
+*.mov
+*.gif
+*.raw
+*.avi
+*.flv
+
+# Voces TTS generadas
+assets/voices/tts_*.wav
+assets/voices/tts_*.mp3
+assets/voices/*.tmp
+
+# Logs
+*.log
+logs/
+
+# Estado y cache
+config/state.json
+config/*.tmp
+
+# Grabaciones
+recordings/
+
+# ---------------------------------------------------------
+# Modelos y assets pesados (opcional, descomentar si no
+# quieres subirlos a git)
+# ---------------------------------------------------------
+# assets/avatar/*.vrm
+# assets/avatar/*.glb
+# assets/avatar/*.gltf
+# assets/avatar/*.fbx
+# assets/avatar/*.live2d
+# assets/avatar/*.model3.json
+
+# ---------------------------------------------------------
+# Archivos de entorno
+# ---------------------------------------------------------
+.env
+.env.*
+!.env.example
+
+# ---------------------------------------------------------
+# Credenciales y secretos
+# ---------------------------------------------------------
+*.pem
+*.key
+*.crt
+secrets.json
+credentials.json
+
+# ---------------------------------------------------------
+# Documentacion generada
+# ---------------------------------------------------------
+docs/_build/
+docs/build/
+site/
+
+# ---------------------------------------------------------
+# Docker
+# ---------------------------------------------------------
+.dockerignore
+
+# ---------------------------------------------------------
+# Backups
+# ---------------------------------------------------------
+*.bak
+*.backup
+*.old
+
+# ---------------------------------------------------------
+# Comprimidos
+# ---------------------------------------------------------
+*.zip
+*.tar
+*.tar.gz
+*.rar
+*.7z
+
+# ---------------------------------------------------------
+# Archivos temporales
+# ---------------------------------------------------------
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# ---------------------------------------------------------
+# Cobertura y perfiles de rendimiento
+# ---------------------------------------------------------
+*.prof
+*.lprof
+cprofile.out
+
+# ---------------------------------------------------------
+# Jupyter
+# ---------------------------------------------------------
+.ipynb_checkpoints/
+*.ipynb
+
+# ---------------------------------------------------------
+# Archivos de sistema
+# ---------------------------------------------------------
+Icon?
+.Spotlight-V100
+.fseventsd
