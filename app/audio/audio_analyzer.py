@@ -10,6 +10,11 @@ from typing import Optional, Dict, Any, List, Tuple
 from app.core.config import Config
 from app.core.state import State, AudioFeatures
 
+try:
+    import sounddevice as _sd
+except Exception:
+    _sd = None
+
 
 # =========================================================
 # ANALIZADOR DE AUDIO
@@ -110,32 +115,33 @@ class AudioAnalyzer:
     # =====================================================
 
     def load(self, path: str) -> bool:
-        """Carga un archivo de audio WAV en memoria."""
+        """Carga un archivo de audio usando soundfile (WAV, MP3, OGG, FLAC)."""
         p = Path(path)
         if not p.exists():
             return False
 
         try:
-            with wave.open(str(p), "rb") as w:
-                self.channels = w.getnchannels()
-                self.sample_rate = w.getframerate()
-                self.total_samples = w.getnframes()
-                self.duration = self.total_samples / float(self.sample_rate or 1)
-                raw = w.readframes(self.total_samples)
+            import soundfile as sf
+            data, sr = sf.read(str(p), dtype="float32", always_2d=False)
+
+            if data.ndim > 1:
+                data = data.mean(axis=1)
+                channels = 2
+            else:
+                channels = 1
 
             if self._np is not None:
-                dtype = self._np.int16
-                samples = self._np.frombuffer(raw, dtype=dtype).astype(self._np.float32)
-                samples /= 32768.0
-                if self.channels > 1:
-                    samples = samples.reshape(-1, self.channels).mean(axis=1)
-                self.audio_data = samples
+                self.audio_data = self._np.asarray(data, dtype=self._np.float32)
             else:
-                # Fallback: lista simple de ints
-                self.audio_data = [
-                    int.from_bytes(raw[i:i+2], "little", signed=True) / 32768.0
-                    for i in range(0, len(raw), 2)
-                ]
+                self.audio_data = [float(x) for x in data]
+
+            self.sample_rate = int(sr)
+            self.channels = channels
+            if self._np is not None and hasattr(self.audio_data, "shape"):
+                self.total_samples = self.audio_data.shape[0]
+            else:
+                self.total_samples = len(self.audio_data)
+            self.duration = self.total_samples / float(self.sample_rate or 1)
 
             self.audio_path = str(p)
             self.current_sample = 0
@@ -472,6 +478,60 @@ class AudioAnalyzer:
     # =====================================================
     # CONTROL DE REPRODUCCIÓN
     # =====================================================
+
+    # =====================================================
+    # REPRODUCCION
+    # =====================================================
+
+    def play(self, blocking: bool = False) -> bool:
+        """Reproduce el audio cargado por los altavoces."""
+        if self.audio_data is None:
+            return False
+        if _sd is None:
+            print("[AudioAnalyzer] sounddevice no disponible, no se puede reproducir")
+            return False
+
+        try:
+            data = self.audio_data
+            if self._np is not None:
+                data = self._np.asarray(data, dtype=self._np.float32)
+                if data.ndim == 2:
+                    data = data.flatten()
+            else:
+                data = list(data)
+
+            self._stream = _sd.play(data, self.sample_rate, blocking=blocking)
+            self.playing = True
+            self._play_started_at = time.time()
+            return True
+        except Exception as e:
+            print(f"[AudioAnalyzer] Error al reproducir: {e}")
+            return False
+
+    def stop_playback(self):
+        """Detiene la reproduccion actual."""
+        if _sd is not None:
+            try:
+                _sd.stop()
+            except Exception:
+                pass
+        self.playing = False
+
+    def wait_playback(self):
+        """Bloquea hasta que termine la reproduccion."""
+        if _sd is not None:
+            try:
+                _sd.wait()
+            except Exception:
+                pass
+        self.playing = False
+
+    @property
+    def playback_time(self) -> float:
+        """Tiempo transcurrido desde que empezo la reproduccion."""
+        if not self.playing:
+            return 0.0
+        return time.time() - self._play_started_at
 
     def reset_position(self):
         """Reinicia la posición de lectura al inicio."""

@@ -334,6 +334,9 @@ class XarionApplication:
             print(f"[XARION] No se pudo cargar audio: {audio_path}")
             return False
 
+        # Reproducir por los altavoces (no bloqueante)
+        self.analyzer.play(blocking=False)
+
         self.state.audio.file_path = audio_path
         self.state.audio.duration = duration
         self.state.audio.current_time = 0.0
