@@ -9,13 +9,18 @@
     "fps": 30,
     "width": 1280,
     "height": 720,
-    "background_color": [0, 0, 0, 255],
+    "background_color": [
+      0,
+      0,
+      0,
+      255
+    ],
     "antialiasing": true,
     "quality": "high"
   },
   "avatar": {
-    "default_path": "assets/avatar/avatar.png",
-    "default_format": "png_layers",
+    "default_path": "AVATAR XARION MEJORADO.png",
+    "default_format": "single_image",
     "scale": 1.0,
     "auto_blink": true,
     "auto_idle": true
@@ -49,7 +54,10 @@
     "extension": ".mp4",
     "include_audio": true,
     "fps": 30,
-    "resolution": [1280, 720]
+    "resolution": [
+      1280,
+      720
+    ]
   },
   "performance": {
     "max_cpu": 90,

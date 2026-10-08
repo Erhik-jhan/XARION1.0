@@ -56,6 +56,7 @@ from app.avatar.blink import BlinkController
 from app.avatar.mouth import MouthController
 from app.avatar.head_motion import HeadMotionController
 from app.avatar.body_motion import BodyMotionController
+from app.avatar.window import AvatarWindow, PYQT_AVAILABLE
 
 from app.audio.tts import TTSController
 from app.audio.audio_analyzer import AudioAnalyzer
@@ -232,8 +233,63 @@ class XarionApplication:
                 fmt=avatar_data["format"],
             )
 
+        # Abrir ventana del avatar
+        self.show_avatar()
+
         self.state.engine_state = EngineState.READY
         print("[XARION] Inicialización completa")
+
+    def show_avatar(self):
+        """Abre la ventana del avatar en un hilo separado."""
+        if not PYQT_AVAILABLE:
+            print("[XARION] PyQt6 no disponible, no se mostrara el avatar")
+            return False
+
+        from pathlib import Path as _Path
+        image_path = self.settings.get("avatar.default_path", "")
+        if not image_path:
+            # fallback: buscar cualquier png en assets/avatar/
+            avatar_dir = self.config.AVATAR_DIR
+            if avatar_dir.exists():
+                for f in avatar_dir.iterdir():
+                    if f.suffix.lower() in (".png", ".jpg", ".jpeg"):
+                        image_path = str(f)
+                        break
+
+        if not image_path or not _Path(image_path).exists():
+            print("[XARION] No se encontro imagen de avatar")
+            return False
+
+        try:
+            import threading
+            self.avatar_window = AvatarWindow(image_path, fps=self.state.target_fps)
+            self.avatar_window.on_frame = self._on_avatar_frame
+            t = threading.Thread(target=self.avatar_window.start, daemon=True)
+            t.start()
+            print(f"[XARION] Ventana del avatar iniciada ({image_path})")
+            return True
+        except Exception as e:
+            print(f"[XARION] Error iniciando ventana: {e}")
+            return False
+
+    def _on_avatar_frame(self, delta: float):
+        """Actualiza la ventana con el estado del motor."""
+        if self.avatar_window is None:
+            return
+        body = self.state.avatar_components.body
+        head = self.state.avatar_components.head
+        ant = self.state.avatar_components.antenna
+
+        # Rotacion desde cabeza (yaw)
+        self.avatar_window.set_rotation(head.rotation_y * 20.0)
+
+        # Opacidad y glow
+        self.avatar_window.set_glow(ant.glow_intensity)
+
+        # Escala con respiracion
+        base_scale = self.state.avatar_scale if hasattr(self.state, "avatar_scale") else 1.0
+        breath = body.breathing_amplitude
+        self.avatar_window.set_breathing(breath, 0.9)
 
     def start(self):
         """Inicia el bucle principal del motor."""
