@@ -110,6 +110,13 @@ class XarionApplication:
         self._wire_modules()
         self._register_engine_modules()
 
+        # --- Ventana del avatar ---
+        self.avatar_window = None
+
+        # --- Celebracion tras despedida ---
+        self._celebrate_after_speech = False
+        self._celebrate_until = 0.0
+
         # --- Señales ---
         self._running = False
         self._setup_signal_handlers()
@@ -125,7 +132,7 @@ class XarionApplication:
 
         # Avatar
         self.avatar_loader = AvatarLoader(self.config)
-        self.avatar_renderer = AvatarRenderer(self.config)
+        # El avatar_renderer se crea dentro de show_avatar() tras QApplication
         self.eyes = EyesController(self.config)
         self.blink = BlinkController(self.config)
         self.mouth = MouthController(self.config)
@@ -181,7 +188,6 @@ class XarionApplication:
     def _register_engine_modules(self):
         """Registra módulos en el motor principal."""
         self.engine.register("avatar_loader", self.avatar_loader)
-        self.engine.register("avatar_renderer", self.avatar_renderer)
         self.engine.register("audio_tts", self.tts)
         self.engine.register("audio_analyzer", self.analyzer)
         self.engine.register("motion_engine", self.motion_engine)
@@ -205,7 +211,7 @@ class XarionApplication:
         self.settings.apply_to_engine(self.engine)
 
         # Inicializar motores
-        self.avatar_renderer.initialize()
+        # El renderer se inicializa dentro de show_avatar() cuando se crea la ventana
         self.avatar_loader.load()
         self.tts.initialize()
         self.analyzer.initialize()
@@ -224,14 +230,7 @@ class XarionApplication:
         self.recorder.initialize()
         self.exporter.initialize()
 
-        # Cargar capas del avatar si ya está cargado
-        if self.avatar_loader.is_loaded():
-            avatar_data = self.avatar_loader.avatar_data
-            self.avatar_renderer.load_layers(avatar_data)
-            self.state.set_avatar_loaded(
-                path=avatar_data["path"],
-                fmt=avatar_data["format"],
-            )
+        # El avatar se carga dentro de show_avatar()
 
         # Abrir ventana del avatar
         self.show_avatar()
@@ -261,41 +260,101 @@ class XarionApplication:
             return False
 
         try:
-            import threading
-            self.avatar_window = AvatarWindow(image_path, fps=self.state.target_fps)
+            from PyQt6.QtWidgets import QApplication
+            import sys as _sys
+
+            # Crear QApplication ANTES de cualquier QPixmap
+            # IMPORTANTE: guardar la referencia para que no sea recolectada
+            if QApplication.instance() is None:
+                XarionApplication._qt_app = QApplication(_sys.argv)
+
+            from app.avatar.renderer import AvatarRenderer
+
+            renderer = AvatarRenderer(self.config)
+            if not renderer.load():
+                print("[XARION] No se pudieron cargar las capas del avatar")
+                return False
+
+            percent = self.settings.get("avatar.screen_size_percent", 30)
+            self.avatar_window = AvatarWindow(
+                renderer=renderer,
+                screen_size_percent=percent,
+                fps=self.state.target_fps,
+            )
             self.avatar_window.on_frame = self._on_avatar_frame
-            t = threading.Thread(target=self.avatar_window.start, daemon=True)
-            t.start()
-            print(f"[XARION] Ventana del avatar iniciada ({image_path})")
+            # Mostrar la ventana inmediatamente (sin lanzar app.exec aun)
+            self.avatar_window.prepare()
+            print(f"[XARION] Ventana del avatar mostrada ({percent}% de pantalla)")
             return True
         except Exception as e:
             print(f"[XARION] Error iniciando ventana: {e}")
             return False
 
     def _on_avatar_frame(self, delta: float):
-        """Actualiza la ventana con el estado del motor."""
+        """Aplica el estado del motor al renderer de la ventana."""
         if self.avatar_window is None:
             return
-        body = self.state.avatar_components.body
-        head = self.state.avatar_components.head
-        ant = self.state.avatar_components.antenna
+        renderer = getattr(self.avatar_window, "renderer", None)
+        if renderer is None:
+            return
+        renderer.apply_state(self.state)
 
-        # Rotacion desde cabeza (yaw)
-        self.avatar_window.set_rotation(head.rotation_y * 20.0)
-
-        # Opacidad y glow
-        self.avatar_window.set_glow(ant.glow_intensity)
-
-        # Escala con respiracion
-        base_scale = self.state.avatar_scale if hasattr(self.state, "avatar_scale") else 1.0
-        breath = body.breathing_amplitude
-        self.avatar_window.set_breathing(breath, 0.9)
 
     def start(self):
-        """Inicia el bucle principal del motor."""
+        """Inicia el bucle principal: motor + ventana en el hilo principal."""
         self._running = True
         self.engine.on("tick", self._on_engine_tick)
-        self.engine.start()
+
+        # Si hay ventana, usar QTimer para avanzar el motor
+        # y app.exec() en el hilo principal.
+        if self.avatar_window is not None:
+            from PyQt6.QtCore import QTimer
+            from PyQt6.QtWidgets import QApplication
+
+            # Preparar ventana (crea widget y lo muestra)
+            self.avatar_window.prepare()
+
+            # QTimer para avanzar el motor a FPS fijo
+            self._qt_timer = QTimer()
+            self._qt_timer.timeout.connect(self._qt_engine_tick)
+            interval = int(1000 / max(1, self.state.target_fps))
+            self._qt_timer.start(interval)
+
+            # Arrancar engine sin bloqueo (solo setea state)
+            if hasattr(self.engine, "state"):
+                self.engine.state.is_running = True
+
+            print("[XARION] Motor iniciado en modo Qt")
+            QApplication.instance().exec()
+        else:
+            # Modo sin ventana (CLI puro)
+            self.engine.start()
+
+    def _qt_engine_tick(self):
+        """Callback del QTimer: avanza el motor un frame y refresca la ventana."""
+        import time
+        now = time.time()
+        delta = now - getattr(self, "_qt_last_tick", now)
+        self._qt_last_tick = now
+        if delta > 0.5:
+            delta = 0.5  # cap
+        try:
+            self._on_engine_tick(delta)
+        except Exception as e:
+            print(f"[XARION] Error en tick: {e}")
+        # Apagar celebracion si se paso el tiempo
+        if self._celebrate_until > 0 and time.time() >= self._celebrate_until:
+            renderer = getattr(self.avatar_window, "renderer", None) if self.avatar_window else None
+            if renderer is not None:
+                renderer.celebrating = False
+            self._celebrate_until = 0.0
+
+        # Refrescar la ventana
+        if self.avatar_window is not None:
+            try:
+                self.avatar_window.tick(delta)
+            except Exception as e:
+                print(f"[XARION] Error en window.tick: {e}")
 
     def stop(self):
         """Detiene la aplicación."""
@@ -327,6 +386,25 @@ class XarionApplication:
                 self.state.audio.features = features
                 self.rhythm.update(delta, features)
                 self.sync.push_features(self.state.audio.current_time, features)
+
+            # Detectar fin del audio
+            if self.analyzer.is_finished():
+                self.state.audio.state = AudioState.FINISHED
+                self.state.change_gesture(GestureType.NEUTRAL)
+                try:
+                    self.analyzer.stop_playback()
+                except Exception:
+                    pass
+
+                # Si el texto activo celebracion, encenderla 3 segundos
+                if self._celebrate_after_speech:
+                    renderer = getattr(self.avatar_window, "renderer", None) if self.avatar_window else None
+                    if renderer is not None:
+                        renderer.celebrating = True
+                    self._celebrate_until = time.time() + 3.0
+                    self._celebrate_after_speech = False
+
+                print("[XARION] Audio finalizado")
 
         # Actualizar controllers de avatar
         self.eyes.update(delta, self.state)
@@ -377,7 +455,15 @@ class XarionApplication:
     # ========================================================
 
     def speak(self, text: str, voice: Optional[str] = None) -> bool:
-        """Genera voz y activa el gesto de habla."""
+        """Genera voz y activa el gesto de habla.
+
+        Si el texto contiene palabras clave de despedida, se activa
+        el modo celebracion (pulgares arriba) al terminar el audio.
+        """
+        # Detectar palabras clave que activan celebracion
+        keywords = ["adios", "adiós", "nos vemos", "un gusto", "like", "gracias"]
+        text_lower = text.lower()
+        self._celebrate_after_speech = any(k in text_lower for k in keywords)
         result = self.tts.synthesize(text, voice=voice)
         if not result.get("success"):
             print(f"[XARION] Error TTS: {result.get('error')}")
@@ -529,17 +615,47 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 
 
 def _run_demo(app: XarionApplication, duration: float = 12.0):
-    """Ejecuta una demo autoejecutable."""
-    print("[XARION] Demo iniciada")
-    app.speak("Hola, soy XARION 1.0. Estoy listo para ayudarte.")
-    time.sleep(3)
-    app.ask("¿Qué necesitas?")
-    time.sleep(2.5)
-    app.speak("Puedo hablar, moverme y responder a tu voz.")
-    time.sleep(3)
-    app.set_gesture(GestureType.NEUTRAL)
-    time.sleep(3)
-    print("[XARION] Demo completada")
+    """Secuencia oficial del video de presentacion de XARION 1.0.
+
+    Todo el guion va en un solo texto. Las comas y puntos crean
+    las pausas naturales en la voz generada por el TTS.
+    """
+    from PyQt6.QtCore import QTimer
+
+    print("[XARION] Secuencia de video iniciada")
+
+    guion = (
+        "Hola, soy XARION. "
+        "Un avatar animado construido completamente en Python. "
+        "No soy una simple imagen: puedo ver, escuchar y reaccionar. "
+        "Tengo ojos que te miran, una boca que habla, y un cuerpo que respira. "
+        "Fui creado por la empresa XARION. "
+        "Actualmente estoy en desarrollo, pero mi proposito ya esta claro. "
+        "Pronto formare parte de las paginas web de cada cliente. "
+        "Estare ahi para ayudarte, para responder tus preguntas, "
+        "para guiarte en lo que buscas. "
+        "Sin prisa, sin presion, a tu ritmo. "
+        "Porque la tecnologia debe adaptarse a las personas, no al reves. "
+        "Estoy listo para empezar contigo. "
+        "Esto es solo el comienzo."
+    )
+
+    print(f"[XARION] Guion: {len(guion)} caracteres")
+
+    def _hablar():
+        app.speak(guion)
+
+    def _esperar_fin():
+        state_value = app.state.audio.state.value
+        if state_value in ("finished", "empty"):
+            print("[XARION] Secuencia completada")
+            QTimer.singleShot(4000, lambda: app.stop())
+        else:
+            QTimer.singleShot(200, _esperar_fin)
+
+    QTimer.singleShot(1000, _hablar)
+    QTimer.singleShot(2000, _esperar_fin)
+
 
 
 def main():
@@ -576,26 +692,43 @@ def main():
             except ValueError:
                 print(f"[XARION] Gesto inválido: {args.gesture}")
 
-        if args.text:
-            app.speak(args.text, voice=args.voice)
+        # --- Demo / Texto / Bucle ---
+        want_demo = args.demo or not (args.text or args.record)
 
-        # --- Demo ---
-        if args.demo or not (args.text or args.record):
-            _run_demo(app, duration=args.duration or 12.0)
+        if want_demo:
+            # Programar el demo DESPUES de arrancar Qt
+            from PyQt6.QtCore import QTimer
 
-        # --- Bucle principal ---
-        if args.duration > 0:
-            app.run_forever()
-        elif args.text or args.gesture or args.demo:
-            # Pequeña ventana para procesar el bucle
+            def _run_demo_after_start():
+                try:
+                    _run_demo(app, duration=args.duration or 12.0)
+                except Exception as e:
+                    print(f"[XARION] Error en demo: {e}")
+
+            QTimer.singleShot(500, _run_demo_after_start)
             app.start()
-            start = time.time()
-            timeout = args.duration if args.duration > 0 else 15.0
-            while time.time() - start < timeout:
-                time.sleep(0.1)
-            app.stop()
+
+        elif args.text or args.gesture:
+            # Programar el habla DESPUES de arrancar Qt
+            from PyQt6.QtCore import QTimer
+
+            def _speak_after_start():
+                try:
+                    if args.gesture:
+                        try:
+                            app.set_gesture(GestureType(args.gesture))
+                        except ValueError:
+                            print(f"[XARION] Gesto invalido: {args.gesture}")
+                    if args.text:
+                        app.speak(args.text, voice=args.voice)
+                except Exception as e:
+                    print(f"[XARION] Error hablando: {e}")
+
+            QTimer.singleShot(5000, _speak_after_start)  # 5 segundos de espera
+            app.start()
+
         else:
-            app.run_forever()
+            app.start()
 
     finally:
         # --- Cerrar grabación si está activa ---

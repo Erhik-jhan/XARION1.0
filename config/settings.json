@@ -23,7 +23,9 @@
     "default_format": "single_image",
     "scale": 1.0,
     "auto_blink": true,
-    "auto_idle": true
+    "auto_idle": true,
+    "screen_size_percent": 90,
+    "always_on_top": true
   },
   "audio": {
     "tts_engine": "edge",

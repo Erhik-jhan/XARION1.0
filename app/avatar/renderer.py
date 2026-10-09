@@ -1,308 +1,200 @@
 # app/avatar/renderer.py
 
 import time
-from typing import Optional, Dict, Any, Tuple
 from pathlib import Path
+from typing import Optional, Dict, Any, List, Tuple
+
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QPixmap, QPainter, QColor
 
 from app.core.config import Config
-from app.core.state import State, AvatarState
+from app.core.state import State
 
 
 class AvatarRenderer:
     """
-    Renderizador oficial del avatar de XARION-1.0.
-    Dibuja el avatar en un canvas y aplica todas las transformaciones:
-    ojos, parpadeo, boca, cabeza, cuerpo, antena.
+    Renderizador por capas de XARION 1.0.
+
+    Reglas:
+    - Idle: dibuja body.png
+    - Hablando: head.png + ojos + cejas + boca (boca parpadea cada 0.05s)
+    - Parpadeo: eyes_closed.png
+    - Fondo: background.png siempre al fondo
     """
 
-    def __init__(self, config: Optional[Config] = None):
+    MOUTH_TOGGLE_INTERVAL = 0.5  # 500 milisegundos por transicion
+
+    def __init__(self, config: Optional[Config] = None, layers_dir: Optional[Path] = None):
         self.config = config or Config()
-        self.canvas = None
-        self.surface = None
-        self.width = self.config.WINDOW_WIDTH
-        self.height = self.config.WINDOW_HEIGHT
-        self.background = self.config.BACKGROUND_COLOR
-        self.render_mode = "2d"           # "2d" | "3d" | "web"
-        self.layers: Dict[str, Any] = {}
-        self.initialized = False
+        self.layers_dir = layers_dir or (self.config.AVATAR_DIR / "layers")
+
+        self.layers: Dict[str, QPixmap] = {}
+        self.base_size: Optional[Tuple[int, int]] = None
+        self.loaded = False
+
+        # Estado
+        self.talking = False
+        self.blink_closed = False
+        self.celebrating = False
+        self._mouth_visible = True
+        self._last_mouth_toggle = 0.0
+
+        # Transformaciones (por si luego animamos)
+        self.head_offset_x = 0.0
+        self.head_offset_y = 0.0
+        self.head_rotation = 0.0
+        self.eye_offset_x = 0.0
+        self.eye_offset_y = 0.0
+        self.body_offset_x = 0.0
+        self.body_offset_y = 0.0
+
+        # Estadisticas
         self.frames_rendered = 0
         self.last_render_time = 0.0
 
     # =====================================================
-    # INICIALIZACIÓN
+    # CARGA
     # =====================================================
 
-    def initialize(self):
-        """Inicializa el renderizador y crea el canvas."""
-        try:
-            self._setup_canvas()
-            self.initialized = True
-        except Exception as e:
-            print(f"[AvatarRenderer] Error al inicializar: {e}")
-            self.initialized = False
-
-    def _setup_canvas(self):
-        """Crea la superficie/canvas de renderizado."""
-        # Modo 2D nativo (sin dependencias externas obligatorias)
-        self.canvas = {
-            "width": self.width,
-            "height": self.height,
-            "background": self.background,
-            "mode": self.render_mode,
-        }
-        self.layers = {
-            "background": None,
-            "body": None,
-            "head": None,
-            "antenna": None,
-            "eyes": None,
-            "blink": None,
-            "mouth": None,
-            "overlay": None,
-        }
-
-    # =====================================================
-    # CARGA DE CAPAS
-    # =====================================================
-
-    def load_layers(self, avatar_data: Dict[str, Any]) -> bool:
-        """
-        Carga las capas del avatar a partir de los datos del loader.
-        Soporta PNG por capas, Live2D, VRM, GLB, custom.
-        """
-        if not avatar_data or not avatar_data.get("raw"):
+    def load(self) -> bool:
+        all_layers = [
+            "background", "body", "head", "head_empty",
+            "eye_left", "eye_right", "eyes_closed",
+            "brow_left", "brow_right", "mouth",
+            "glow", "arm_left", "arm_right",
+        ]
+        if not self.layers_dir.exists():
+            print(f"[AvatarRenderer] Carpeta no existe: {self.layers_dir}")
             return False
 
-        raw = avatar_data["raw"]
-        fmt = raw.get("type", "unknown")
+        for name in all_layers:
+            path = self.layers_dir / f"{name}.png"
+            if not path.exists():
+                continue
+            pix = QPixmap(str(path))
+            if pix.isNull():
+                continue
+            self.layers[name] = pix
+            if self.base_size is None:
+                self.base_size = (pix.width(), pix.height())
 
-        try:
-            if fmt == "png_layers":
-                self._load_png_layers(raw)
-            elif fmt == "live2d":
-                self._load_live2d_layers(raw)
-            elif fmt in ("vrm", "gltf", "fbx"):
-                self._load_3d_layers(raw)
-            elif fmt == "custom":
-                self._load_custom_layers(raw)
-            else:
-                return False
-            return True
-        except Exception as e:
-            print(f"[AvatarRenderer] Error al cargar capas: {e}")
-            return False
-
-    def _load_png_layers(self, raw: Dict[str, Any]):
-        """Carga capas PNG (body, eyes, mouth, head, antenna)."""
-        for name, path in raw.get("layers", {}).items():
-            self.layers[name] = {"type": "image", "path": path, "loaded": True}
-
-    def _load_live2d_layers(self, raw: Dict[str, Any]):
-        """Carga el modelo Live2D y prepara sus partes."""
-        model = raw.get("model_data", {})
-        self.layers["live2d_model"] = {
-            "type": "live2d",
-            "data": model,
-            "loaded": True,
-        }
-
-    def _load_3d_layers(self, raw: Dict[str, Any]):
-        """Carga el modelo 3D (VRM/GLTF/FBX)."""
-        self.layers["3d_model"] = {
-            "type": "3d",
-            "file": raw.get("file"),
-            "loaded": True,
-        }
-
-    def _load_custom_layers(self, raw: Dict[str, Any]):
-        """Carga un avatar definido por JSON personalizado."""
-        data = raw.get("data", {})
-        for part_name, part_data in data.get("parts", {}).items():
-            self.layers[part_name] = {
-                "type": "custom",
-                "data": part_data,
-                "loaded": True,
-            }
+        self.loaded = len(self.layers) > 0
+        print(f"[AvatarRenderer] {len(self.layers)} capas cargadas ({self.base_size})")
+        return self.loaded
 
     # =====================================================
-    # RENDER PRINCIPAL
+    # SELECCION DE CAPAS
     # =====================================================
 
-    def render(self, delta: float, state: State):
-        """
-        Renderiza un frame completo del avatar aplicando el estado actual.
-        """
-        if not self.initialized or not state.avatar_loaded:
+    def _current_layers(self) -> List[str]:
+        """Devuelve el orden de capas segun el estado actual."""
+        order: List[str] = []
+        if "background" in self.layers:
+            order.append("background")
+
+        # Celebracion: pulgares arriba + ojos cerrados
+        if self.celebrating and "eyes_closed" in self.layers:
+            order.append("eyes_closed")
+            return order
+
+        # Blink: se antepone a todo
+        if self.blink_closed and "eyes_closed" in self.layers:
+            order.append("eyes_closed")
+            return order
+
+        if self.talking and "head" in self.layers:
+            # Hablando: base vacia + cara encima
+            order.append("head")
+            if "eye_left" in self.layers:
+                order.append("eye_left")
+            if "eye_right" in self.layers:
+                order.append("eye_right")
+            if "brow_left" in self.layers:
+                order.append("brow_left")
+            if "brow_right" in self.layers:
+                order.append("brow_right")
+            if self._mouth_visible and "mouth" in self.layers:
+                order.append("mouth")
+            return order
+
+        # Idle: body
+        if "body" in self.layers:
+            order.append("body")
+        return order
+
+    # =====================================================
+    # RENDER
+    # =====================================================
+
+    def render(self, painter: QPainter, scale: float = 1.0):
+        if not self.loaded:
             return
 
         start = time.time()
 
-        # 1. Limpiar canvas
-        self._clear()
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
-        # 2. Dibujar capas base
-        self._draw_background()
-        self._draw_body(state)
-        self._draw_head(state)
-        self._draw_antenna(state)
+        painter.save()
+        painter.scale(scale, scale)
 
-        # 3. Dibujar partes animables
-        self._draw_eyes(state)
-        self._draw_blink(state)
-        self._draw_mouth(state)
+        order = self._current_layers()
+        for name in order:
+            pix = self.layers.get(name)
+            if pix is None:
+                continue
+            painter.drawPixmap(0, 0, pix)
 
-        # 4. Overlay / efectos
-        self._draw_overlay(state)
+        painter.restore()
 
         self.frames_rendered += 1
         self.last_render_time = time.time() - start
 
     # =====================================================
-    # DIBUJO POR COMPONENTE
+    # ACTUALIZACION
     # =====================================================
 
-    def _clear(self):
-        """Limpia el canvas antes de dibujar."""
-        # En modo 2D nativo, se rellenaría con el color de fondo
-        pass
+    def apply_state(self, state: State):
+        """Traduce el estado del motor a modo de dibujo."""
+        # Detectar si esta hablando
+        audio_playing = state.audio.state.value == "playing"
+        gesture_talking = state.gesture.current.value == "talking"
+        self.talking = audio_playing or gesture_talking
 
-    def _draw_background(self):
-        """Dibuja el fondo del canvas."""
-        pass
+        # Parpadeo desactivado en todos los modos.
+        # eyes_closed.png tiene pulgares, no se debe usar para parpadear.
+        self.blink_closed = False
 
-    def _draw_body(self, state: State):
-        """Dibuja el cuerpo aplicando posición, rotación y escala."""
-        body = state.avatar_components.body
-        transform = {
-            "x": body.position_x + state.avatar_position.get("x", 0.0),
-            "y": body.position_y + state.avatar_position.get("y", 0.0),
-            "z": body.position_z + state.avatar_position.get("z", 0.0),
-            "rx": body.rotation_x,
-            "ry": body.rotation_y,
-            "rz": body.rotation_z,
-            "scale": body.scale * state.avatar_scale,
-        }
-        self._apply_transform("body", transform)
-
-    def _draw_head(self, state: State):
-        """Dibuja la cabeza con su rotación (pitch, yaw, roll)."""
-        head = state.avatar_components.head
-        transform = {
-            "rx": head.rotation_x,
-            "ry": head.rotation_y,
-            "rz": head.rotation_z,
-            "tilt": head.tilt_offset,
-        }
-        self._apply_transform("head", transform)
-
-    def _draw_antenna(self, state: State):
-        """Dibuja la antena con su pulso luminoso."""
-        ant = state.avatar_components.antenna
-        params = {
-            "glow": ant.glow_intensity,
-            "phase": ant.pulse_phase,
-            "color": ant.color,
-        }
-        self._apply_transform("antenna", params)
-
-    def _draw_eyes(self, state: State):
-        """Dibuja los ojos con dirección de mirada y brillo."""
-        eyes = state.avatar_components.eyes
-        params = {
-            "look_x": eyes.look_x,
-            "look_y": eyes.look_y,
-            "openness": eyes.openness,
-            "glow": eyes.glow_intensity,
-            "dilation": eyes.pupil_dilation,
-            "color": eyes.color,
-        }
-        self._apply_transform("eyes", params)
-
-    def _draw_blink(self, state: State):
-        """Dibuja el efecto de parpadeo encima de los ojos."""
-        blink = state.avatar_components.blink
-        if blink.is_blinking:
-            params = {
-                "progress": blink.blink_progress,
-                "openness": 1.0 - blink.blink_progress,
-            }
-            self._apply_transform("blink", params)
-
-    def _draw_mouth(self, state: State):
-        """Dibuja la boca con apertura, sonrisa y brillo."""
-        mouth = state.avatar_components.mouth
-        params = {
-            "openness": mouth.openness,
-            "smile": mouth.smile,
-            "viseme": mouth.viseme,
-            "glow": mouth.glow_intensity,
-            "color": mouth.color,
-        }
-        self._apply_transform("mouth", params)
-
-    def _draw_overlay(self, state: State):
-        """Dibuja efectos adicionales (grabación, glow global, etc.)."""
-        if state.recording.state.value == "recording":
-            self._apply_transform("overlay", {"recording": True})
+        # Boca parpadeante mientras habla
+        if self.talking:
+            now = time.time()
+            if now - self._last_mouth_toggle >= self.MOUTH_TOGGLE_INTERVAL:
+                self._mouth_visible = not self._mouth_visible
+                self._last_mouth_toggle = now
+        else:
+            self._mouth_visible = True
+            self._last_mouth_toggle = 0.0
 
     # =====================================================
-    # TRANSFORMACIONES
+    # CONSULTAS
     # =====================================================
 
-    def _apply_transform(self, layer_name: str, params: Dict[str, Any]):
-        """
-        Aplica una transformación a una capa del avatar.
-        En modo nativo guarda los parámetros; los backends reales
-        (PIL, Three.js, Live2D) los consumen para dibujar.
-        """
-        if layer_name not in self.layers:
-            self.layers[layer_name] = {}
-        self.layers[layer_name]["transform"] = params
+    def get_base_size(self) -> Tuple[int, int]:
+        return self.base_size or (1678, 937)
 
-    # =====================================================
-    # EXPORTACIÓN DE FRAME
-    # =====================================================
-
-    def get_frame(self) -> Optional[Any]:
-        """Devuelve el frame actual renderizado (para grabación)."""
+    def get_info(self) -> Dict[str, Any]:
         return {
-            "canvas": self.canvas,
-            "layers": self.layers,
-            "frame_index": self.frames_rendered,
-            "timestamp": time.time(),
-        }
-
-    # =====================================================
-    # CONTROL
-    # =====================================================
-
-    def resize(self, width: int, height: int):
-        """Redimensiona el canvas de renderizado."""
-        self.width = width
-        self.height = height
-        if self.canvas:
-            self.canvas["width"] = width
-            self.canvas["height"] = height
-
-    def set_background(self, color: Tuple[int, int, int, int]):
-        """Cambia el color de fondo del render."""
-        self.background = color
-        if self.canvas:
-            self.canvas["background"] = color
-
-    def get_stats(self) -> Dict[str, Any]:
-        """Devuelve estadísticas del renderizador."""
-        return {
-            "initialized": self.initialized,
+            "loaded": self.loaded,
+            "layers_count": len(self.layers),
+            "layers": list(self.layers.keys()),
+            "base_size": self.base_size,
+            "talking": self.talking,
+            "blink_closed": self.blink_closed,
             "frames_rendered": self.frames_rendered,
             "last_render_time": self.last_render_time,
-            "resolution": (self.width, self.height),
-            "mode": self.render_mode,
-            "layers_loaded": [k for k, v in self.layers.items() if v],
         }
 
-    def shutdown(self):
-        """Libera recursos del renderizador."""
-        self.layers = {}
-        self.canvas = None
-        self.initialized = False
+
+def build_layers_directory(config: Optional[Config] = None) -> Path:
+    cfg = config or Config()
+    return cfg.AVATAR_DIR / "layers"
